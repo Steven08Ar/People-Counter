@@ -7,7 +7,7 @@ import sqlite3
 from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
-import time
+import numpy as np
 
 # Variable global para el proceso de la cámara
 camera_process = None
@@ -17,7 +17,6 @@ def start_camera():
     global camera_process
     if camera_process is None:
         try:
-            # Ejecuta el comando para iniciar la cámara
             camera_process = subprocess.Popen([
                 "python", "people_counter.py",
                 "--prototxt", "detector/MobileNetSSD_deploy.prototxt",
@@ -34,7 +33,6 @@ def stop_camera():
     global camera_process
     if camera_process is not None:
         try:
-            # Finaliza el proceso del contador de personas
             process = psutil.Process(camera_process.pid)
             for proc in process.children(recursive=True):
                 proc.terminate()
@@ -47,78 +45,75 @@ def stop_camera():
         status_label.config(text="La cámara no está activa")
 
 def show_statistics():
-    """Abre dos ventanas: una tabla y una gráfica lineal que se actualizan automáticamente."""
+    """Muestra una ventana con opciones de gráficas para las estadísticas."""
 
-    def update_table():
-        """Actualiza la tabla con datos de la base de datos."""
-        for row in tree.get_children():
-            tree.delete(row)
-        try:
-            conn = sqlite3.connect("people_count.db")
-            cursor = conn.cursor()
-            cursor.execute("SELECT datetime, entries, exits FROM statistics ORDER BY id DESC LIMIT 10")
-            rows = cursor.fetchall()
-            for row in rows:
-                tree.insert("", "end", values=row)
-            conn.close()
-        except sqlite3.Error as e:
-            print(f"Error al leer la base de datos: {e}")
-        # Reprogramar la actualización en 2 segundos
-        stats_window.after(2000, update_table)
+    def open_graph_window(graph_type):
+        """Abre una ventana con la gráfica seleccionada que se actualiza en tiempo real."""
+        graph_window = tk.Toplevel(root)
+        graph_window.title(f"Gráfica - {graph_type.capitalize()}")
+        graph_window.geometry("700x500")
 
-    def update_graph():
-        """Actualiza la gráfica con datos de la base de datos."""
-        try:
-            conn = sqlite3.connect("people_count.db")
-            cursor = conn.cursor()
-            cursor.execute("SELECT datetime, entries, exits FROM statistics ORDER BY id DESC LIMIT 10")
-            rows = cursor.fetchall()
-            rows.reverse()  # Ordenar por fecha ascendente
-            x = [row[0] for row in rows]
-            y_entries = [row[1] for row in rows]
-            y_exits = [row[2] for row in rows]
+        # Configurar la gráfica
+        fig, ax = plt.subplots(figsize=(6, 4))
+        canvas = FigureCanvasTkAgg(fig, master=graph_window)
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-            ax.clear()
-            ax.plot(x, y_entries, label="Entradas", color="blue")
-            ax.plot(x, y_exits, label="Salidas", color="red")
-            ax.set_title("Estadísticas en Tiempo Real")
-            ax.set_xlabel("Fecha y Hora")
-            ax.set_ylabel("Conteo")
-            ax.legend()
-            canvas.draw()
-            conn.close()
-        except sqlite3.Error as e:
-            print(f"Error al leer la base de datos: {e}")
-        # Reprogramar la actualización en 2 segundos
-        graph_window.after(2000, update_graph)
+        def update_graph():
+            """Actualiza la gráfica en tiempo real según el tipo."""
+            try:
+                conn = sqlite3.connect("people_count.db")
+                cursor = conn.cursor()
+                cursor.execute("SELECT datetime, entries, exits FROM statistics ORDER BY id DESC LIMIT 10")
+                rows = cursor.fetchall()
+                rows.reverse()  # Ordenar por fecha ascendente
+                x = [row[0] for row in rows]
+                y_entries = [row[1] for row in rows]
+                y_exits = [row[2] for row in rows]
 
-    # Crear la ventana para la tabla
+                ax.clear()
+                if graph_type == "line":
+                    ax.plot(x, y_entries, label="Entradas", color="blue")
+                    ax.plot(x, y_exits, label="Salidas", color="red")
+                    ax.set_title("Gráfico Lineal")
+                elif graph_type == "bar":
+                    bar_width = 0.4
+                    x_indices = np.arange(len(x))
+                    ax.bar(x_indices - bar_width / 2, y_entries, bar_width, label="Entradas", color="blue")
+                    ax.bar(x_indices + bar_width / 2, y_exits, bar_width, label="Salidas", color="red")
+                    ax.set_xticks(x_indices)
+                    ax.set_xticklabels(x, rotation=45)
+                    ax.set_title("Gráfico de Barras")
+                elif graph_type == "hist":
+                    ax.hist([y_entries, y_exits], bins=5, label=["Entradas", "Salidas"], color=["blue", "red"], alpha=0.7)
+                    ax.set_title("Histograma")
+                elif graph_type == "pie":
+                    total_entries = sum(y_entries)
+                    total_exits = sum(y_exits)
+                    ax.pie([total_entries, total_exits], labels=["Entradas", "Salidas"], autopct='%1.1f%%', colors=["blue", "red"])
+                    ax.set_title("Gráfico de Pastel")
+
+                ax.legend()
+                canvas.draw()
+                conn.close()
+            except sqlite3.Error as e:
+                print(f"Error al leer la base de datos: {e}")
+            graph_window.after(2000, update_graph)
+
+        # Iniciar la actualización de la gráfica
+        update_graph()
+
+    # Crear la ventana para seleccionar el tipo de gráfica
     stats_window = tk.Toplevel(root)
-    stats_window.title("Estadísticas - Tabla")
-    stats_window.geometry("500x300")
+    stats_window.title("Opciones de Gráficas")
+    stats_window.geometry("300x200")
 
-    columns = ("datetime", "entries", "exits")
-    tree = ttk.Treeview(stats_window, columns=columns, show="headings")
-    tree.heading("datetime", text="Fecha y Hora")
-    tree.heading("entries", text="Entradas")
-    tree.heading("exits", text="Salidas")
-    tree.pack(fill=tk.BOTH, expand=True)
+    tk.Label(stats_window, text="Seleccione el tipo de gráfica", font=("Helvetica", 12)).pack(pady=10)
 
-    # Actualizar tabla inicialmente
-    update_table()
-
-    # Crear la ventana para la gráfica
-    graph_window = tk.Toplevel(root)
-    graph_window.title("Estadísticas - Gráfica")
-    graph_window.geometry("600x400")
-
-    # Configurar la gráfica
-    fig, ax = plt.subplots(figsize=(6, 4))
-    canvas = FigureCanvasTkAgg(fig, master=graph_window)
-    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-    # Actualizar gráfica inicialmente
-    update_graph()
+    # Botones para cada tipo de gráfica
+    tk.Button(stats_window, text="Gráfico Lineal", command=lambda: open_graph_window("line"), font=("Helvetica", 10)).pack(pady=5)
+    tk.Button(stats_window, text="Gráfico de Barras", command=lambda: open_graph_window("bar"), font=("Helvetica", 10)).pack(pady=5)
+    tk.Button(stats_window, text="Histograma", command=lambda: open_graph_window("hist"), font=("Helvetica", 10)).pack(pady=5)
+    tk.Button(stats_window, text="Gráfico de Pastel", command=lambda: open_graph_window("pie"), font=("Helvetica", 10)).pack(pady=5)
 
 def close_application():
     """Cierra la interfaz y termina la aplicación."""
