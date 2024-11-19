@@ -5,6 +5,9 @@ import signal
 import psutil
 import sqlite3
 from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.pyplot as plt
+import time
 
 # Variable global para el proceso de la cámara
 camera_process = None
@@ -44,8 +47,9 @@ def stop_camera():
         status_label.config(text="La cámara no está activa")
 
 def show_statistics():
-    """Muestra estadísticas en tiempo real desde la base de datos."""
-    def update_statistics():
+    """Abre dos ventanas: una tabla y una gráfica lineal que se actualizan automáticamente."""
+
+    def update_table():
         """Actualiza la tabla con datos de la base de datos."""
         for row in tree.get_children():
             tree.delete(row)
@@ -59,13 +63,40 @@ def show_statistics():
             conn.close()
         except sqlite3.Error as e:
             print(f"Error al leer la base de datos: {e}")
+        # Reprogramar la actualización en 2 segundos
+        stats_window.after(2000, update_table)
 
-    # Crear una nueva ventana para estadísticas
+    def update_graph():
+        """Actualiza la gráfica con datos de la base de datos."""
+        try:
+            conn = sqlite3.connect("people_count.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT datetime, entries, exits FROM statistics ORDER BY id DESC LIMIT 10")
+            rows = cursor.fetchall()
+            rows.reverse()  # Ordenar por fecha ascendente
+            x = [row[0] for row in rows]
+            y_entries = [row[1] for row in rows]
+            y_exits = [row[2] for row in rows]
+
+            ax.clear()
+            ax.plot(x, y_entries, label="Entradas", color="blue")
+            ax.plot(x, y_exits, label="Salidas", color="red")
+            ax.set_title("Estadísticas en Tiempo Real")
+            ax.set_xlabel("Fecha y Hora")
+            ax.set_ylabel("Conteo")
+            ax.legend()
+            canvas.draw()
+            conn.close()
+        except sqlite3.Error as e:
+            print(f"Error al leer la base de datos: {e}")
+        # Reprogramar la actualización en 2 segundos
+        graph_window.after(2000, update_graph)
+
+    # Crear la ventana para la tabla
     stats_window = tk.Toplevel(root)
-    stats_window.title("Estadísticas en Tiempo Real")
+    stats_window.title("Estadísticas - Tabla")
     stats_window.geometry("500x300")
 
-    # Tabla para mostrar estadísticas
     columns = ("datetime", "entries", "exits")
     tree = ttk.Treeview(stats_window, columns=columns, show="headings")
     tree.heading("datetime", text="Fecha y Hora")
@@ -73,12 +104,21 @@ def show_statistics():
     tree.heading("exits", text="Salidas")
     tree.pack(fill=tk.BOTH, expand=True)
 
-    # Botón para actualizar estadísticas
-    refresh_button = tk.Button(stats_window, text="Actualizar", command=update_statistics, bg="blue", fg="white")
-    refresh_button.pack(pady=10)
+    # Actualizar tabla inicialmente
+    update_table()
 
-    # Actualizar las estadísticas al abrir la ventana
-    update_statistics()
+    # Crear la ventana para la gráfica
+    graph_window = tk.Toplevel(root)
+    graph_window.title("Estadísticas - Gráfica")
+    graph_window.geometry("600x400")
+
+    # Configurar la gráfica
+    fig, ax = plt.subplots(figsize=(6, 4))
+    canvas = FigureCanvasTkAgg(fig, master=graph_window)
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    # Actualizar gráfica inicialmente
+    update_graph()
 
 def close_application():
     """Cierra la interfaz y termina la aplicación."""
