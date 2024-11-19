@@ -44,76 +44,113 @@ def stop_camera():
     else:
         status_label.config(text="La cámara no está activa")
 
-def show_statistics():
-    """Muestra una ventana con opciones de gráficas para las estadísticas."""
+def show_table():
+    """Abre una ventana con la tabla mostrando los datos de la base de datos."""
+    def update_table():
+        """Actualiza la tabla con datos de la base de datos."""
+        for row in tree.get_children():
+            tree.delete(row)
+        try:
+            conn = sqlite3.connect("people_count.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT datetime, entries, exits FROM statistics ORDER BY id DESC LIMIT 10")
+            rows = cursor.fetchall()
+            for row in rows:
+                tree.insert("", "end", values=row)
+            conn.close()
+        except sqlite3.Error as e:
+            print(f"Error al leer la base de datos: {e}")
+        table_window.after(2000, update_table)
 
-    def open_graph_window(graph_type):
-        """Abre una ventana con la gráfica seleccionada que se actualiza en tiempo real."""
-        graph_window = tk.Toplevel(root)
-        graph_window.title(f"Gráfica - {graph_type.capitalize()}")
-        graph_window.geometry("700x500")
+    # Crear la ventana para la tabla
+    table_window = tk.Toplevel(root)
+    table_window.title("Tabla - Base de Datos")
+    table_window.geometry("500x300")
 
-        # Configurar la gráfica
-        fig, ax = plt.subplots(figsize=(6, 4))
-        canvas = FigureCanvasTkAgg(fig, master=graph_window)
-        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+    columns = ("datetime", "entries", "exits")
+    tree = ttk.Treeview(table_window, columns=columns, show="headings")
+    tree.heading("datetime", text="Fecha y Hora")
+    tree.heading("entries", text="Entradas")
+    tree.heading("exits", text="Salidas")
+    tree.pack(fill=tk.BOTH, expand=True)
 
-        def update_graph():
-            """Actualiza la gráfica en tiempo real según el tipo."""
-            try:
-                conn = sqlite3.connect("people_count.db")
-                cursor = conn.cursor()
-                cursor.execute("SELECT datetime, entries, exits FROM statistics ORDER BY id DESC LIMIT 10")
-                rows = cursor.fetchall()
-                rows.reverse()  # Ordenar por fecha ascendente
-                x = [row[0] for row in rows]
-                y_entries = [row[1] for row in rows]
-                y_exits = [row[2] for row in rows]
+    # Actualizar tabla inicialmente
+    update_table()
 
-                ax.clear()
-                if graph_type == "line":
-                    ax.plot(x, y_entries, label="Entradas", color="blue")
-                    ax.plot(x, y_exits, label="Salidas", color="red")
-                    ax.set_title("Gráfico Lineal")
-                elif graph_type == "bar":
-                    bar_width = 0.4
-                    x_indices = np.arange(len(x))
-                    ax.bar(x_indices - bar_width / 2, y_entries, bar_width, label="Entradas", color="blue")
-                    ax.bar(x_indices + bar_width / 2, y_exits, bar_width, label="Salidas", color="red")
-                    ax.set_xticks(x_indices)
-                    ax.set_xticklabels(x, rotation=45)
-                    ax.set_title("Gráfico de Barras")
-                elif graph_type == "hist":
-                    ax.hist([y_entries, y_exits], bins=5, label=["Entradas", "Salidas"], color=["blue", "red"], alpha=0.7)
-                    ax.set_title("Histograma")
-                elif graph_type == "pie":
-                    total_entries = sum(y_entries)
-                    total_exits = sum(y_exits)
-                    ax.pie([total_entries, total_exits], labels=["Entradas", "Salidas"], autopct='%1.1f%%', colors=["blue", "red"])
-                    ax.set_title("Gráfico de Pastel")
+def show_graph(graph_type):
+    """Muestra la ventana con el gráfico del tipo seleccionado."""
+    def update_graph():
+        """Actualiza la gráfica dependiendo del tipo de gráfico seleccionado."""
+        try:
+            conn = sqlite3.connect("people_count.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT datetime, entries, exits FROM statistics ORDER BY id DESC LIMIT 10")
+            rows = cursor.fetchall()
+            rows.reverse()  # Ordenar por fecha ascendente
+            x = [row[0] for row in rows]
+            y_entries = [row[1] for row in rows]
+            y_exits = [row[2] for row in rows]
 
-                ax.legend()
-                canvas.draw()
-                conn.close()
-            except sqlite3.Error as e:
-                print(f"Error al leer la base de datos: {e}")
-            graph_window.after(2000, update_graph)
+            ax.clear()
+            if graph_type == "line":
+                ax.plot(x, y_entries, label="Entradas", color="blue")
+                ax.plot(x, y_exits, label="Salidas", color="red")
+                ax.set_title("Gráfico Lineal")
+            elif graph_type == "bar":
+                bar_width = 0.4
+                x_indices = np.arange(len(x))
+                ax.bar(x_indices - bar_width / 2, y_entries, bar_width, label="Entradas", color="blue")
+                ax.bar(x_indices + bar_width / 2, y_exits, bar_width, label="Salidas", color="red")
+                ax.set_xticks(x_indices)
+                ax.set_xticklabels(x, rotation=45)
+                ax.set_title("Gráfico de Barras")
+            elif graph_type == "hist":
+                ax.hist([y_entries, y_exits], bins=5, label=["Entradas", "Salidas"], color=["blue", "red"], alpha=0.7)
+                ax.set_title("Histograma")
+            elif graph_type == "pie":
+                total_entries = sum(y_entries)
+                total_exits = sum(y_exits)
+                ax.pie([total_entries, total_exits], labels=["Entradas", "Salidas"], autopct='%1.1f%%', colors=["blue", "red"])
+                ax.set_title("Gráfico de Pastel")
 
-        # Iniciar la actualización de la gráfica
-        update_graph()
+            ax.legend()
+            canvas.draw()
+            conn.close()
+        except sqlite3.Error as e:
+            print(f"Error al leer la base de datos: {e}")
 
-    # Crear la ventana para seleccionar el tipo de gráfica
-    stats_window = tk.Toplevel(root)
-    stats_window.title("Opciones de Gráficas")
-    stats_window.geometry("300x200")
+    # Crear la ventana para la gráfica
+    graph_window = tk.Toplevel(root)
+    graph_window.title("Estadísticas - Gráfica")
+    graph_window.geometry("700x500")
 
-    tk.Label(stats_window, text="Seleccione el tipo de gráfica", font=("Helvetica", 12)).pack(pady=10)
+    # Configurar la gráfica
+    fig, ax = plt.subplots(figsize=(6, 4))
+    canvas = FigureCanvasTkAgg(fig, master=graph_window)
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-    # Botones para cada tipo de gráfica
-    tk.Button(stats_window, text="Gráfico Lineal", command=lambda: open_graph_window("line"), font=("Helvetica", 10)).pack(pady=5)
-    tk.Button(stats_window, text="Gráfico de Barras", command=lambda: open_graph_window("bar"), font=("Helvetica", 10)).pack(pady=5)
-    tk.Button(stats_window, text="Histograma", command=lambda: open_graph_window("hist"), font=("Helvetica", 10)).pack(pady=5)
-    tk.Button(stats_window, text="Gráfico de Pastel", command=lambda: open_graph_window("pie"), font=("Helvetica", 10)).pack(pady=5)
+    # Actualizar gráfica
+    update_graph()
+
+def select_graph_type():
+    """Abre una ventana para seleccionar el tipo de gráfica antes de mostrarla."""
+    def open_graph(graph_type):
+        """Abre la ventana del gráfico seleccionado."""
+        graph_selector.destroy()  # Cerrar la ventana de selección
+        show_graph(graph_type)
+
+    # Crear la ventana de selección
+    graph_selector = tk.Toplevel(root)
+    graph_selector.title("Seleccionar Tipo de Gráfica")
+    graph_selector.geometry("300x200")
+
+    tk.Label(graph_selector, text="Seleccione el tipo de gráfica:", font=("Helvetica", 12)).pack(pady=10)
+
+    # Botones para seleccionar el tipo de gráfica
+    tk.Button(graph_selector, text="Lineal", command=lambda: open_graph("line")).pack(pady=5)
+    tk.Button(graph_selector, text="Barras", command=lambda: open_graph("bar")).pack(pady=5)
+    tk.Button(graph_selector, text="Histograma", command=lambda: open_graph("hist")).pack(pady=5)
+    tk.Button(graph_selector, text="Pastel", command=lambda: open_graph("pie")).pack(pady=5)
 
 def close_application():
     """Cierra la interfaz y termina la aplicación."""
@@ -123,7 +160,7 @@ def close_application():
 # Crear la ventana principal
 root = tk.Tk()
 root.title("Menú - Contador de Personas")
-root.geometry("400x300")
+root.geometry("400x400")
 
 # Etiqueta de título
 title_label = tk.Label(root, text="Contador de Personas", font=("Helvetica", 16))
@@ -137,8 +174,12 @@ start_button.pack(pady=10)
 stop_button = tk.Button(root, text="Apagar Cámara", command=stop_camera, font=("Helvetica", 12), bg="red", fg="white")
 stop_button.pack(pady=10)
 
-# Botón para ver estadísticas
-stats_button = tk.Button(root, text="Ver Estadísticas", command=show_statistics, font=("Helvetica", 12), bg="blue", fg="white")
+# Botón para mostrar la tabla
+table_button = tk.Button(root, text="Mostrar Tabla BD", command=show_table, font=("Helvetica", 12), bg="orange", fg="white")
+table_button.pack(pady=10)
+
+# Botón para seleccionar y ver estadísticas
+stats_button = tk.Button(root, text="Ver Estadísticas", command=select_graph_type, font=("Helvetica", 12), bg="blue", fg="white")
 stats_button.pack(pady=10)
 
 # Botón para cerrar la aplicación
