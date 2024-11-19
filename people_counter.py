@@ -264,7 +264,7 @@ def people_counter():
 			# if there is no existing trackable object, create one
 			if to is None:
 				to = TrackableObject(objectID, centroid)
-
+				
 			# otherwise, there is a trackable object so we can utilize it
 			# to determine direction
 			else:
