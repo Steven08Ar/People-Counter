@@ -78,7 +78,7 @@ def show_table():
     update_table()
 
 def show_graph(graph_type):
-    """Muestra la ventana con el gráfico del tipo seleccionado."""
+    """Muestra la ventana con el gráfico del tipo seleccionado y actualiza automáticamente."""
     def update_graph():
         """Actualiza la gráfica dependiendo del tipo de gráfico seleccionado."""
         try:
@@ -119,6 +119,9 @@ def show_graph(graph_type):
         except sqlite3.Error as e:
             print(f"Error al leer la base de datos: {e}")
 
+        # Reprogramar la actualización automática cada 2 segundos
+        graph_window.after(2000, update_graph)
+
     # Crear la ventana para la gráfica
     graph_window = tk.Toplevel(root)
     graph_window.title("Estadísticas - Gráfica")
@@ -129,7 +132,7 @@ def show_graph(graph_type):
     canvas = FigureCanvasTkAgg(fig, master=graph_window)
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-    # Actualizar gráfica
+    # Iniciar actualización automática de la gráfica
     update_graph()
 
 def select_graph_type():
